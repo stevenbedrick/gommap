@@ -1,0 +1,113 @@
+<html>
+
+  <head>
+    <title>MetaMap!</title>
+
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
+
+    <script type="text/javascript" charset="utf-8">
+      $(document).ready(function() {
+        
+        $('#map').click(function(ev) {
+          var text_to_map = $('#text').val();
+          $('#spinner').show();
+          $.getJSON('/parsed',{'str': text_to_map, 'format': 'json' }, function(data, textStatus) {
+            
+            var list = $('<ul/>');
+            
+            $(data['phrases']).each(function(idx, matched_token) {          
+			  if (matched_token['mappings']) {
+				  var this_item = $('<li/>');
+	              var concept_name = matched_token['mappings'][0]['concept_name']
+	              var pref_name = matched_token['mappings'][0]['preferred_name']
+	              this_item.text(concept_name + ' (' + pref_name + ')');
+	              list.append(this_item);
+			  }
+            });
+            
+            var dest = $('#results');
+            dest.empty();
+            dest.append(list);
+            			
+			chunks = []
+			var last_start, last_length, last_stop = null;
+			
+			$(data['phrases']).each(function(idx, phrase) {
+
+				start_pos = phrase['offsets']['offset_start'];
+				length = phrase['offsets']['offset_length'];
+				stop_pos = start_pos + length;
+
+				// first, did we skip any text? if so, we'll need to add those segments first				
+				if (start_pos - last_stop > 0) {
+					chunks.push({'text': text_to_map.substr(last_stop, (start_pos - last_stop)), 'mapping': null});
+				}
+
+				var concept_name = phrase['mappings'][0]['concept_name']
+				var pref_name = phrase['mappings'][0]['preferred_name']
+				
+				chunks.push({'text': text_to_map.substr(start_pos, length), 'mapping':{'concept_name':concept_name, 'pref_name':pref_name}});
+
+				last_start = start_pos
+				last_length = length
+				last_stop = stop_pos
+			});
+			
+			var chunk_list = $('<div/>');
+			$(chunks).each(function(idx, chunk) {
+				var this_item = $('<span/>');
+				if (chunk['mapping']) {					
+					this_item.addClass('mapped');
+				}
+				this_item.text(chunk['text']);
+				chunk_list.append(this_item);
+			});
+			
+			dest = $('#pretty');
+			dest.empty();
+			dest.append(chunk_list);
+			
+			
+            // stop the spinner:
+            $('#spinner').hide();
+			
+			// print elapsed time
+			$('#elapsed_time em').text((data['parse_time'] / 1e6).toString() + " ms");
+            
+          });
+          
+        });
+        
+      });
+    </script>
+    
+    <style type="text/css" media="screen">
+      textarea {
+        width: 20em;
+        height: 10em;
+      }
+	  
+	  .mapped {
+		  background-color: #c8ffcd;
+	  }
+    </style>
+    
+  </head>
+  
+  <body>
+
+    Enter your text:
+    <p/>
+    <textarea id="text">In this paper, we describe a system that provides drug side-effect data for use as a component in service-oriented architectures.</textarea>
+    
+    <input type="button" id="map" value="Map!"/><img id="spinner" src="/ui/ajax-loader.gif" style="display: none;"/>
+	<span id="elapsed_time"><em></em></span>
+    
+	<div id="pretty">
+	</div>
+	
+    <div id="results">
+    </div>
+  </body>
+
+</html>
